@@ -49,6 +49,29 @@ ignored.
 The level of each log mode, starting with the lowest log level is as follows:
 `"trace"` `"debug"` `"info"` `"warn"` `"error"` `"fatal"`
 
+**Valid values:** `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`
+(case-sensitive, lowercase only). If an invalid value is assigned, the module
+will emit a one-time warning to `stderr` and automatically fall back to
+`"trace"` so that logging continues to work.
+
+
+## Error handling
+
+log.lua is designed to be safe in production: it should never crash your
+application as a result of misconfiguration or I/O failure.
+
+* **Invalid `log.level`** — a one-time warning is printed to `stderr` and the
+  level is reset to `"trace"`. Subsequent log calls proceed normally.
+* **Unwritable `log.outfile`** — if the file cannot be opened (bad path,
+  missing directory, insufficient permissions) or written to, a one-time
+  warning is printed to `stderr` and file output is silently disabled for that
+  path. Console output is unaffected.
+* **Empty or non-string `log.outfile`** — treated as misconfiguration; a
+  one-time warning is printed and file output is skipped.
+
+In all cases the warning is emitted only once per distinct issue so that log
+output is not flooded.
+
 
 ## License
 This library is free software; you can redistribute it and/or modify it under
