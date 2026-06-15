@@ -11,7 +11,6 @@ local log = { _version = "0.1.0" }
 
 log.usecolor = true
 log.outfile = nil
-log.level = "trace"
 
 
 local modes = {
@@ -25,9 +24,20 @@ local modes = {
 
 
 local levels = {}
+local level_names = {}
 for i, v in ipairs(modes) do
   levels[v.name] = i
+  level_names[i] = v.name
 end
+local level_list = table.concat(level_names, ", ")
+
+
+-- The active minimum level is kept private so that assigning an invalid value
+-- to `log.level` is rejected immediately (see the metatable at the bottom of
+-- this file) instead of blowing up with a cryptic comparison error the next
+-- time something is logged. The logging functions read this upvalue directly
+-- so the common path stays a plain table lookup.
+local _level = "trace"
 
 
 local round = function(x, increment)
@@ -52,12 +62,17 @@ local tostring = function(...)
 end
 
 
+-- Outfiles we have already failed to open, so the fallback warning is emitted
+-- once per path instead of on every single log call.
+local outfile_failed = {}
+
+
 for i, x in ipairs(modes) do
   local nameupper = x.name:upper()
   log[x.name] = function(...)
-    
+
     -- Return early if we're below the log level
-    if i < levels[log.level] then
+    if i < levels[_level] then
       return
     end
 
@@ -75,16 +90,52 @@ for i, x in ipairs(modes) do
                         msg))
 
     -- Output to log file
-    if log.outfile then
-      local fp = io.open(log.outfile, "a")
-      local str = string.format("[%-6s%s] %s: %s\n",
-                                nameupper, os.date(), lineinfo, msg)
-      fp:write(str)
-      fp:close()
+    local outfile = log.outfile
+    if outfile then
+      local fp, err = io.open(outfile, "a")
+      if fp then
+        fp:write(string.format("[%-6s%s] %s: %s\n",
+                               nameupper, os.date(), lineinfo, msg))
+        fp:close()
+      elseif not outfile_failed[outfile] then
+        -- Degrade gracefully: console logging above already happened, so just
+        -- warn once and keep going rather than crashing the caller.
+        outfile_failed[outfile] = true
+        io.stderr:write(string.format(
+          "log.lua: unable to open outfile %q for writing (%s); "
+            .. "file logging is disabled for this path\n",
+          _tostring(outfile), _tostring(err)))
+      end
     end
 
   end
 end
+
+
+setmetatable(log, {
+  __index = function(_, k)
+    -- `level` is stored privately; expose it for reads so callers can still
+    -- inspect the current value via `log.level`.
+    if k == "level" then
+      return _level
+    end
+    return nil
+  end,
+  __newindex = function(t, k, v)
+    if k == "level" then
+      -- Reject bad configuration at assignment time with a clear message
+      -- instead of deferring an opaque crash to the next log call.
+      if levels[v] == nil then
+        error(string.format(
+          "log.lua: invalid log level %s (valid levels: %s)",
+          _tostring(v), level_list), 2)
+      end
+      _level = v
+    else
+      rawset(t, k, v)
+    end
+  end,
+})
 
 
 return log

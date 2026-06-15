@@ -40,6 +40,11 @@ ANSI colors and always use the full date rather than just the time. By default
 set as the `log.outfile` then it is created on the first message logged. If the
 file already exists it is appended to.
 
+If the file cannot be opened for writing (for example because of a bad path or
+missing permissions), logging does not abort: console output continues as
+normal and a single warning describing the problem is written to `stderr` for
+that path. Fixing the path or permissions re-enables file output.
+
 #### log.level
 The minimum level to log, any logging function called with a lower level than
 the `log.level` is ignored and no text is outputted or written. By default this
@@ -48,6 +53,11 @@ ignored.
 
 The level of each log mode, starting with the lowest log level is as follows:
 `"trace"` `"debug"` `"info"` `"warn"` `"error"` `"fatal"`
+
+These six names are the only valid values. Assigning anything else to
+`log.level` raises a clear error immediately at the point of assignment (the
+message lists the accepted levels), instead of failing later with an obscure
+error the next time a message is logged.
 
 
 ## License
